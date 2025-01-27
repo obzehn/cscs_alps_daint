@@ -62,11 +62,51 @@ which gcc
 which g++
 ```
 to `-DCMAKE_C_COMPILER` and `-DCMAKE_CXX_COMPILER`, respectively.
-At this point you should have a working GROMACS2023 patched with PLUMED2.9.1 installation, you can exit the environment. These installations are now linked to the develop environment, so before sourcing their binaries we have to get into the GROMACS develop uenv.
+At this point you should have a working GROMACS2023 patched with PLUMED2.9.1 installation, you can exit the environment and the debug node. These installations are now linked to the develop environment, so before sourcing their binaries we have to get into the GROMACS develop uenv.
 The sbatch script to submit jobs is similar to that for Baobab/Piz-Daint but has a few more mandatory keywords. The max time is still capped at 24h. Consider also that you must i) define the environment that you need in the sbatch file or ii) submit the sbatch file from within the environment you intend to use. In general it is better to define the environment and its view in the sbatch file so to avoid mistakes and failed jobs. There are also other two details that are important
 1. Despite the GH chipsets having 72 core each, the CSCS people [say](https://confluence.cscs.ch/display/KB/GROMACS#GROMACS-HowtoRun) that one should use max 64 of them or let some cores free to handle other background processes within the node. So, don’t require more than 64 cores per GH chipset.
 2. One has to force CUDA-MPI aware parallelization within the node. This is achieved with a few lines in the sbatch file AND by adding a wrapper each time we call srun to run a job.
-One way to do this is to save a copy of the wrapper in a directory in your home folder alongside the other programs (`~/programs/mps-wrapper.sh`) and point at it in the sbatch file rather than copy-paste the wrapper in a new directory everytime I have to run a simulation, but you do you. You can download a copy of the wrapper from [here](https://confluence.cscs.ch/display/KB/Oversubscription+of+GPU+cards#OversubscriptionofGPUcards-WrapperScript) or [here](https://eth-cscs.github.io/alps-uenv/uenv-gromacs/). Once you have it, remember to make it executable with
+One way to do this is to save a copy of the wrapper in a directory in your home folder alongside the other programs (`~/programs/mps-wrapper.sh`) and point at it in the sbatch file rather than copy-paste the wrapper in a new directory everytime I have to run a simulation, but you do you. You can download a copy of the wrapper from [here](https://confluence.cscs.ch/display/KB/Oversubscription+of+GPU+cards#OversubscriptionofGPUcards-WrapperScript) or [here](https://eth-cscs.github.io/alps-uenv/uenv-gromacs/) or copy paste what I report here (hopefully this won't need updates, but in case it is not working visit the links for the official CSCS versions). Just create a file
+```
+touch ~/programs/mps-wrapper.sh
+```
+and paste inside this
+```
+#!/bin/bash
+# Example mps-wrapper.sh usage:
+# > srun [...] mps-wrapper.sh -- <cmd>
+
+TEMP=$(getopt -o '' -- "$@")
+eval set -- "$TEMP"
+
+# Now go through all the options
+while true; do
+    case "$1" in
+        --)
+            shift
+            break
+            ;;
+        *)
+            echo "Internal error! $1"
+            exit 1
+            ;;
+    esac
+done
+
+set -u
+
+export CUDA_MPS_PIPE_DIRECTORY=/tmp/nvidia-mps
+export CUDA_MPS_LOG_DIRECTORY=/tmp/nvidia-log
+# Launch MPS from a single rank per node
+if [ $SLURM_LOCALID -eq 0 ]; then
+    CUDA_VISIBLE_DEVICES=0,1,2,3 nvidia-cuda-mps-control -d
+fi
+# Wait for MPS to start sleep 5
+sleep 5
+
+exec "$@"
+```
+Once you have it, remember to make it executable with
 ```
 chmod +x mps-wrapper.sh
 ```
@@ -101,3 +141,44 @@ exit;
 ```
 I am requiring a full node, 4 GPUs (all of them), 8 tasks (the 8 MPIs, one per replica in OneOpes) and I give 32 cores per replica (so that I have 64 per node, the max permitted). You can fine tune this, it might be that other combinations and repartitions of CPUs work well.
 For an unbiased simulation, given the power of the GH nodes, using more than one chipset might be not optimal or just plain bad, if your system is not huge (> 1mln atoms), as the parallel efficiency decreases due to the presence of too many resources and the inter-chip communication. However, if you have more than one independent replica, you can run all of them in parallel. For example, with ca. 200k atoms in terms of total output of the node it is way better to run 4 independent replicas – one per chipset – rather than using a whole node for a system. In this case, a possible sbatch script is the following
+```
+#!/bin/bash
+#SBATCH --job-name=jobname
+#SBATCH --nodes=1
+#SBATCH --time=24:00:00
+#SBATCH --gpus=4
+#SBATCH --ntasks=4
+#SBATCH --cpus-per-task 64
+#SBATCH --account=s1274
+#SBATCH --hint=nomultithread
+#SBATCH --uenv=gromacs/2024:v1
+#SBATCH --view=develop
+# sourcing of GROMACS, PLUMED, and the wrapper location
+# change youruser to you
+source "/users/youruser/programs/plumed-2.9.1/sourceme.sh"
+source "/users/youruser/programs/gromacs-2023/install_mpi/bin/GMXRC"
+wrapper="/users/youruser/programs/mps-wrapper.sh"
+# Grace-Hopper MPI-aware GPU, do not touch
+export MPICH_GPU_SUPPORT_ENABLED=1
+export FI_CXI_RX_MATCH_MODE=software
+export GMX_GPU_DD_COMMS=true
+export GMX_GPU_PME_PP_COMMS=true
+export GMX_FORCE_UPDATE_DEFAULT_GPU=true
+export GMX_ENABLE_DIRECT_GPU_COMM=1
+export GMX_FORCE_GPU_AWARE_MPI=1
+srun -n 4 ${wrapper} -- gmx_mpi mdrun -pin on -ntomp 64 [...] -multidir
+dir1 dir2 dir3 dir4
+exit;
+```
+where the `-multidir` flag points at the different replica directories and there is no -hrex flag, so the replicas are not exchanging and are independent. In this way the whole node is used and you optimize the output for replicas of unbiased runs. There is further space for optimization, e.g. with
+```
+#SBATCH --gpus=4
+#SBATCH --ntasks=8
+#SBATCH --cpus-per-task 32
+srun -n 8 ${wrapper} -- gmx_mpi mdrun -pin on -ntomp 32 -npme 1 [...] -multidir dir1 dir2 dir3 dir4
+```
+you should be able to run the same four simulations but with 2MPI processes per replica and 32OMP per process. This might work better but it is system dependent. Similarly, if the systems are large (>500k atoms), you might try to split one system on two GPUs and run two replicas per node. Given that the simulation time is quite limited, it is better to invest half an hour to fine tune the parameters of your sbatch file. You can do this “for free” if you request to run on the debug queue with the additional
+```
+#SBATCH --partition=debug
+```
+Here you can run only one job at a time for max 30min, but generally there is no waiting time and it should not count towards your total simulation time usage. Just test a few combinations of GPUs/MPI/OMP for your replicas on the debug queue and then submit to the normal queue (just take away the line specifying the debug partition).
