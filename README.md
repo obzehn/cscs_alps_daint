@@ -8,7 +8,7 @@ Regarding our common types of simulations, the main take at home messages are
 2. For small OneOpes runs (e.g. folding), Baobab will be a better choice, as the systems are so small that you can’t really benefit from GH chipsets. It might be that running all eight replicas on the same chipset might be the best choice, but this will leave three-quaters of the node empty. More testing on this in the future probably will be required if needed.
 3. For unbiased simulations, test a few configurations and see how the system scales. Most likely, the best choice will be to run in parallel two or four simulations (2 GPUs or 1 GPU per sim, respectively) by using the multidir flag, but without exchanges. Also more on this later on.
 
-It is likely that in the future we will compile a shared version of GROMACS and PLUMED for everyone to source. For the time being, if you need Daint you will likely need to compile your GROMACS and PLUMED versions. First, login to Daint (more info [here](https://confluence.cscs.ch/display/KB/Daint), for standard ssh you still jump through ela, the new address is daint.alps.cscs.ch). With respect to Piz-Daint and Baobab, here there is not the module load syntax anymore, but they use [`uenv`](https://confluence.cscs.ch/display/KB/uenv+user+environments) to set up the user environment. Basically, you have to create a container that holds your environments, check which environments are available, and pull the one you need. This needs to be done only once, then the environment remains available without having to pull it again. To create the container and pull GROMACS environment just run
+It is likely that in the future we will compile a shared version of GROMACS and PLUMED for everyone to source. For the time being, if you need Daint you will likely need to compile your GROMACS and PLUMED versions. First, login to Daint (more info [here](https://confluence.cscs.ch/display/KB/Daint), for standard ssh you still jump through `ela`, the new address is `daint.alps.cscs.ch`). With respect to Piz-Daint and Baobab, here there is not the module load syntax anymore, but they use [`uenv`](https://confluence.cscs.ch/display/KB/uenv+user+environments) to set up the user environment. Basically, you have to create a container that holds your environments, check which environments are available, and pull the one you need. This needs to be done only once, then the environment remains available without having to pull it again. To create the container and pull GROMACS environment just run
 ```
 uenv repo create
 uenv image pull gromacs/2024:v1
@@ -23,7 +23,7 @@ To compile GROMACS it is better if we `salloc` to a debug node, so we don't cram
 ```
 salloc --nodes=1 -t 00:30:00 --partition=debug
 ```
-The `--partition=debig` gives us a maximum of half an hour to do things. More than sufficient to compile. Now, activate the develop view
+The `--partition=debug` gives us a maximum of half an hour to do things. More than sufficient to compile. Now, from the debug node, activate the develop view
 ```
 uenv start gromacs/2024:v1 --view=develop
 ```
