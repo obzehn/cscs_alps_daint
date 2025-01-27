@@ -27,3 +27,77 @@ uenv start gromacs/2024:v1 --view=develop
 ```
 Notice that this is opening some kind of subshell. If you type exit you won’t exit the node but first only the environment in which you entered. The environment has its own shell with no memory of where you were before, the commands, the aliases, etc. Not the best, but for now that’s how it is.
 At this point, while within the develop environment, you can install the GROMACS and/or PLUMED versions that you want. Here are the commands to get PLUMED 2.9.1 alongside GROMACS 2023.0 in `programs` directory in your home.
+```
+cd ~
+mkdir programs
+cd programs
+wget https://github.com/plumed/plumed2/releases/download/v2.9.1/plumed-2.9.1.tgz
+tar -xf plumed-2.9.1.tgz
+cd plumed-2.9.1
+mv ../plumed-2.9.1.tgz/ ./
+./configure --enable-modules=all
+make -j32
+source sourceme.sh
+cd ..
+```
+PLUMED should compile with MPI active. Then download and patch GROMACS 2023
+```
+wget https://ftp.gromacs.org/gromacs/gromacs-2023.tar.gz
+tar -xf gromacs-2023.tar.gz
+cd gromacs-2023
+mv ../gromacs-2023.tar.gz/ ./
+plumed patch -p
+```
+Select the GROMACS 2023 patch when prompted by PLUMED and install GROMACS
+```
+mkdir build_mpi install_mpi
+cd build_mpi
+cmake .. -DGMX_BUILD_OWN_FFTW=NO -DREGRESSIONTEST_DOWNLOAD=NO -DGMX_GPU=CUDA -DGMX_MPI=ON -DCMAKE_INSTALL_PREFIX=../install_mpi/ -DGMX_SIMD=ARM_NEON_ASIMD -DGMX_HWLOC=ON -DCMAKE_C_COMPILER=/user-environment/linux-sles15-neoverse_v2/gcc-12.3.0/gcc-12.3.0-yfdpfoi7qo4e7ub4l4isthtcfevf4zee/bin/gcc -DCMAKE_CXX_COMPILER=/user-environment/linux-sles15-neoverse_v2/gcc-12.3.0/gcc-12.3.0-yfdpfoi7qo4e7ub4l4isthtcfevf4zee/bin/g++
+make -j32
+make install
+```
+Note that C and C++ compiler are specified by hand because the environment fails to solve them alone. In case the compilation dies because the C/C++ compilators are not found, just provide those listed by
+```
+which gcc
+which g++
+```
+to `-DCMAKE_C_COMPILER` and `-DCMAKE_CXX_COMPILER`, respectively.
+At this point you should have a working GROMACS2023 patched with PLUMED2.9.1 installation, you can exit the environment. These installations are now linked to the develop environment, so before sourcing their binaries we have to get into the GROMACS develop uenv.
+The sbatch script to submit jobs is similar to that for Baobab/Piz-Daint but has a few more mandatory keywords. The max time is still capped at 24h. Consider also that you must i) define the environment that you need in the sbatch file or ii) submit the sbatch file from within the environment you intend to use. In general it is better to define the environment and its view in the sbatch file so to avoid mistakes and failed jobs. There are also other two details that are important
+1. Despite the GH chipsets having 72 core each, the CSCS people [say](https://confluence.cscs.ch/display/KB/GROMACS#GROMACS-HowtoRun) that one should use max 64 of them or let some cores free to handle other background processes within the node. So, don’t require more than 64 cores per GH chipset.
+2. One has to force CUDA-MPI aware parallelization within the node. This is achieved with a few lines in the sbatch file AND by adding a wrapper each time we call srun to run a job.
+One way to do this is to save a copy of the wrapper in a directory in your home folder alongside the other programs (`~/programs/mps-wrapper.sh`) and point at it in the sbatch file rather than copy-paste the wrapper in a new directory everytime I have to run a simulation, but you do you. You can download a copy of the wrapper from [here](https://confluence.cscs.ch/display/KB/Oversubscription+of+GPU+cards#OversubscriptionofGPUcards-WrapperScript) or [here](https://eth-cscs.github.io/alps-uenv/uenv-gromacs/). Once you have it, remember to make it executable with
+```
+chmod +x mps-wrapper.sh
+```
+Here is an example of a sbatch file for a OneOpes run (just fix the sources and the wrapper position depending on your set-up)
+```
+#!/bin/bash
+#SBATCH --job-name=jobname
+#SBATCH --nodes=1
+#SBATCH --time=24:00:00
+#SBATCH --gpus=4
+#SBATCH --ntasks=8
+#SBATCH --cpus-per-task 32
+#SBATCH --account=s1274
+#SBATCH --hint=nomultithread
+#SBATCH --uenv=gromacs/2024:v1
+#SBATCH --view=develop
+# sourcing of GROMACS, PLUMED, and the wrapper location
+# change youruser to you
+source "/users/youruser/programs/plumed-2.9.1/sourceme.sh"
+source "/users/youruser/programs/gromacs-2023/install_mpi/bin/GMXRC"
+wrapper="/users/youruser/programs/mps-wrapper.sh"
+# Grace-Hopper MPI-aware GPU, do not touch
+export MPICH_GPU_SUPPORT_ENABLED=1
+export FI_CXI_RX_MATCH_MODE=software
+export GMX_GPU_DD_COMMS=true
+export GMX_GPU_PME_PP_COMMS=true
+export GMX_FORCE_UPDATE_DEFAULT_GPU=true
+export GMX_ENABLE_DIRECT_GPU_COMM=1
+export GMX_FORCE_GPU_AWARE_MPI=1
+srun -n 8 ${wrapper} -- gmx_mpi mdrun -pin on -ntomp 32 [...]
+exit;
+```
+I am requiring a full node, 4 GPUs (all of them), 8 tasks (the 8 MPIs, one per replica in OneOpes) and I give 32 cores per replica (so that I have 64 per node, the max permitted). You can fine tune this, it might be that other combinations and repartitions of CPUs work well.
+For an unbiased simulation, given the power of the GH nodes, using more than one chipset might be not optimal or just plain bad, if your system is not huge (> 1mln atoms), as the parallel efficiency decreases due to the presence of too many resources and the inter-chip communication. However, if you have more than one independent replica, you can run all of them in parallel. For example, with ca. 200k atoms in terms of total output of the node it is way better to run 4 independent replicas – one per chipset – rather than using a whole node for a system. In this case, a possible sbatch script is the following
