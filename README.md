@@ -7,6 +7,7 @@ Regarding our common types of simulations, the main take at home messages are
 1. For standard OneOpes with 8 replicas and ca. 100/200k atoms boxes, a node is a good compromise and should outperform Baobab (at least in terms of stability). You can easily put two replicas per GH chipset, effectively giving half a GPU and 32 cores to each replica. More on this later on.
 2. For small OneOpes runs (e.g. folding), Baobab will be a better choice, as the systems are so small that you can’t really benefit from GH chipsets. It might be that running all eight replicas on the same chipset might be the best choice, but this will leave three-quaters of the node empty. More testing on this in the future probably will be required if needed.
 3. For unbiased simulations, test a few configurations and see how the system scales. Most likely, the best choice will be to run in parallel two or four simulations (2 GPUs or 1 GPU per sim, respectively) by using the multidir flag, but without exchanges. Also more on this later on.
+
 It is likely that in the future we will compile a shared version of GROMACS and PLUMED for everyone to source. For the time being, if you need Daint you will likely need to compile your GROMACS and PLUMED versions. First, login to Daint (more info [here](https://confluence.cscs.ch/display/KB/Daint), for standard ssh you still jump through ela, the new address is daint.alps.cscs.ch). With respect to Piz-Daint and Baobab, here there is not the module load syntax anymore, but they use [`uenv`](https://confluence.cscs.ch/display/KB/uenv+user+environments) to set up the user environment. Basically, you have to create a container that holds your environments, check which environments are available, and pull the one you need. This needs to be done only once, then the environment remains available without having to pull it again. To create the container and pull GROMACS environment just run
 ```
 uenv repo create
@@ -16,6 +17,7 @@ The `gromacs/2024:v1` environment contains different *views*, basically a differ
 1. **--view=gromacs** loads an installation of GROMACS 2024.1
 2. **--view=plumed** loads an installation of GROMACS 2022.5 patched with PLUMED 2.9.0
 3. **--view=develop** loads the packages needed to install GROMACS related stuff (CUDA etc.) without loading any specific GROMACS.
+
 A few details are outlined in the [uenv gromacs](https://eth-cscs.github.io/alps-uenv/uenv-gromacs/) page from CSCS, and [here](https://confluence.cscs.ch/display/KB/GROMACS).
 To compile GROMACS it is better if we `salloc` to a debug node, so we don't cram the head node with our processes (and get kicked out), with the following
 ```
@@ -65,8 +67,8 @@ to `-DCMAKE_C_COMPILER` and `-DCMAKE_CXX_COMPILER`, respectively.
 At this point you should have a working GROMACS2023 patched with PLUMED2.9.1 installation, you can exit the environment and the debug node. These installations are now linked to the develop environment, so before sourcing their binaries we have to get into the GROMACS develop uenv.
 The sbatch script to submit jobs is similar to that for Baobab/Piz-Daint but has a few more mandatory keywords. The max time is still capped at 24h. Consider also that you must i) define the environment that you need in the sbatch file or ii) submit the sbatch file from within the environment you intend to use. In general it is better to define the environment and its view in the sbatch file so to avoid mistakes and failed jobs. There are also other two details that are important
 1. Despite the GH chipsets having 72 core each, the CSCS people [say](https://confluence.cscs.ch/display/KB/GROMACS#GROMACS-HowtoRun) that one should use max 64 of them or let some cores free to handle other background processes within the node. So, don’t require more than 64 cores per GH chipset.
-2. One has to force CUDA-MPI aware parallelization within the node. This is achieved with a few lines in the sbatch file AND by adding a wrapper each time we call srun to run a job.
-One way to do this is to save a copy of the wrapper in a directory in your home folder alongside the other programs (`~/programs/mps-wrapper.sh`) and point at it in the sbatch file rather than copy-paste the wrapper in a new directory everytime I have to run a simulation, but you do you.
+2. One has to force CUDA-MPI aware parallelization within the node. This is achieved with a few lines in the sbatch file AND by adding a wrapper each time we call srun to run a job. One way to do this is to save a copy of the wrapper in a directory in your home folder alongside the other programs (`~/programs/mps-wrapper.sh`) and point at it in the sbatch file rather than copy-paste the wrapper in a new directory everytime I have to run a simulation, but you do you.
+
 You can download a copy of the wrapper from [here](https://confluence.cscs.ch/display/KB/Oversubscription+of+GPU+cards#OversubscriptionofGPUcards-WrapperScript) or [here](https://eth-cscs.github.io/alps-uenv/uenv-gromacs/) or copy paste what I report here (hopefully this won't need updates, but in case it is not working visit the links for the official CSCS versions). Just create a file
 ```
 touch ~/programs/mps-wrapper.sh
