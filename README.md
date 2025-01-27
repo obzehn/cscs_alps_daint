@@ -9,6 +9,21 @@ Regarding our common types of simulations, the main take at home messages are
 3. For unbiased simulations, test a few configurations and see how the system scales. Most likely, the best choice will be to run in parallel two or four simulations (2 GPUs or 1 GPU per sim, respectively) by using the multidir flag, but without exchanges. Also more on this later on.
 It is likely that in the future we will compile a shared version of GROMACS and PLUMED for everyone to source. For the time being, if you need Daint you will likely need to compile your GROMACS and PLUMED versions. First, login to Daint (more info [here](https://confluence.cscs.ch/display/KB/Daint), for standard ssh you still jump through ela, the new address is daint.alps.cscs.ch). With respect to Piz-Daint and Baobab, here there is not the module load syntax anymore, but they use [`uenv`](https://confluence.cscs.ch/display/KB/uenv+user+environments) to set up the user environment. Basically, you have to create a container that holds your environments, check which environments are available, and pull the one you need. This needs to be done only once, then the environment remains available without having to pull it again. To create the container and pull GROMACS environment just run
 ```
-$ uenv repo create
-$ uenv image pull gromacs/2024:v1
+uenv repo create
+uenv image pull gromacs/2024:v1
 ```
+The `gromacs/2024:v1` environment contains different *views*, basically a different flavour of the environment itself. In this case the GROMACS environment has three flavours
+1. **--view=gromacs** loads an installation of GROMACS 2024.1
+2. **--view=plumed** loads an installation of GROMACS 2022.5 patched with PLUMED 2.9.0
+3. **--view=develop** loads the packages needed to install GROMACS related stuff (CUDA etc.) without loading any specific GROMACS.
+A few details are outlined in the [uenv gromacs](https://eth-cscs.github.io/alps-uenv/uenv-gromacs/) page from CSCS, and [here](https://confluence.cscs.ch/display/KB/GROMACS).
+To compile GROMACS it is better if we `salloc` to a debug node, so we don't cram the head node with our processes (and get kicked out), with the following
+```
+salloc --nodes=1 -t 00:30:00 --partition=debug
+```
+The `--partition=debig` gives us a maximum of half an hour to do things. More than sufficient to compile. Now, activate the develop view
+```
+uenv start gromacs/2024:v1 --view=develop
+```
+Notice that this is opening some kind of subshell. If you type exit you won’t exit the node but first only the environment in which you entered. The environment has its own shell with no memory of where you were before, the commands, the aliases, etc. Not the best, but for now that’s how it is.
+At this point, while within the develop environment, you can install the GROMACS and/or PLUMED versions that you want. Here are the commands to get PLUMED 2.9.1 alongside GROMACS 2023.0 in `programs` directory in your home.
