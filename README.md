@@ -139,11 +139,11 @@ export GMX_ENABLE_DIRECT_GPU_COMM=1
 export GMX_FORCE_GPU_AWARE_MPI=1
 
 # GROMACS stuff
-srun -n 8 ${wrapper} -- gmx_mpi mdrun -pin on -ntomp 32 [...]
+srun -n 8 ${wrapper} -- gmx_mpi mdrun -pin on -ntomp 32 -multidir dir1 dir2 dir3 dir4 dir5 dir6 dir7 [...]
 exit;
 ```
 I am requiring a full node, 4 GPUs (all of them), 8 tasks (the 8 MPIs, one per replica in OneOpes) and I give 32 cores per replica (so that I have 64 per node, the max permitted). You can fine tune this, it might be that other combinations and repartitions of CPUs work well.
-For an unbiased simulation, given the power of the GH nodes, using more than one chipset might be not optimal or just plain bad, if your system is not huge (> 1mln atoms), as the parallel efficiency decreases due to the presence of too many resources and the inter-chip communication. However, if you have more than one independent replica, you can run all of them in parallel. For example, with ca. 200k atoms in terms of total output of the node it is way better to run 4 independent replicas – one per chipset – rather than using a whole node for a system. In this case, a possible sbatch script is [his](./sbatch_plainMD.sh)
+For an unbiased simulation, given the power of the GH nodes, using more than one chipset might be not optimal or just plain bad, if your system is not huge (> 1mln atoms), as the parallel efficiency decreases due to the presence of too many resources and the inter-chip communication. However, if you have more than one independent replica, you can run all of them in parallel. For example, with ca. 200k atoms in terms of total output of the node it is way better to run 4 independent replicas – one per chipset – rather than using a whole node for a system. In this case, a possible sbatch script is [this](./sbatch_plainMD.sh)
 ```
 #!/bin/bash
 #SBATCH --job-name=jobname
