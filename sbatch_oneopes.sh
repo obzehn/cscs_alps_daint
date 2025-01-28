@@ -26,5 +26,5 @@ export GMX_ENABLE_DIRECT_GPU_COMM=1
 export GMX_FORCE_GPU_AWARE_MPI=1
 
 # GROMACS stuff
-srun -n 8 ${wrapper} -- gmx_mpi mdrun -pin on -ntomp 32 [...]
+srun -n 8 ${wrapper} -- gmx_mpi mdrun -pin on -ntomp 32 -multidir dir1 dir2 dir3 dir4 dir5 dir6 dir7 [...]
 exit;
