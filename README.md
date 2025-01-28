@@ -69,11 +69,7 @@ The sbatch script to submit jobs is similar to that for Baobab/Piz-Daint but has
 1. Despite the GH chipsets having 72 core each, the CSCS people [say](https://confluence.cscs.ch/display/KB/GROMACS#GROMACS-HowtoRun) that one should use max 64 of them or let some cores free to handle other background processes within the node. So, don’t require more than 64 cores per GH chipset.
 2. One has to force CUDA-MPI aware parallelization within the node. This is achieved with a few lines in the sbatch file AND by adding a wrapper each time we call srun to run a job. One way to do this is to save a copy of the wrapper in a directory in your home folder alongside the other programs (`~/programs/mps-wrapper.sh`) and point at it in the sbatch file rather than copy-paste the wrapper in a new directory everytime I have to run a simulation, but you do you.
 
-You can download a copy of the wrapper from [here](https://confluence.cscs.ch/display/KB/Oversubscription+of+GPU+cards#OversubscriptionofGPUcards-WrapperScript) or [here](https://eth-cscs.github.io/alps-uenv/uenv-gromacs/) or copy paste what I report here (hopefully this won't need updates, but in case it is not working visit the links for the official CSCS versions). Just create a file
-```
-touch ~/programs/mps-wrapper.sh
-```
-and paste inside this
+You can download a copy of the wrapper from [this github repo](./mps-wrapper.sh) or copy paste the following lines of code (hopefully this won't need updates, but in case it is not working visit the links for the official CSCS versions [here](https://confluence.cscs.ch/display/KB/Oversubscription+of+GPU+cards#OversubscriptionofGPUcards-WrapperScript) or [here](https://eth-cscs.github.io/alps-uenv/uenv-gromacs/)).
 ```
 #!/bin/bash
 # Example mps-wrapper.sh usage:
@@ -109,11 +105,11 @@ sleep 5
 
 exec "$@"
 ```
-Once you have it, remember to make it executable with
+Once you have this script (called here and in the following `mps-wrapper.sh`), remember to make it executable with
 ```
 chmod +x mps-wrapper.sh
 ```
-Here is an example of a sbatch file for a OneOpes run (just fix the sources and the wrapper position depending on your set-up)
+[Here](./sbatch_oneopes.sh) is an example of a sbatch file for a OneOpes run (just fix the sources and the wrapper position depending on your set-up)
 ```
 #!/bin/bash
 #SBATCH --job-name=jobname
@@ -147,7 +143,7 @@ srun -n 8 ${wrapper} -- gmx_mpi mdrun -pin on -ntomp 32 [...]
 exit;
 ```
 I am requiring a full node, 4 GPUs (all of them), 8 tasks (the 8 MPIs, one per replica in OneOpes) and I give 32 cores per replica (so that I have 64 per node, the max permitted). You can fine tune this, it might be that other combinations and repartitions of CPUs work well.
-For an unbiased simulation, given the power of the GH nodes, using more than one chipset might be not optimal or just plain bad, if your system is not huge (> 1mln atoms), as the parallel efficiency decreases due to the presence of too many resources and the inter-chip communication. However, if you have more than one independent replica, you can run all of them in parallel. For example, with ca. 200k atoms in terms of total output of the node it is way better to run 4 independent replicas – one per chipset – rather than using a whole node for a system. In this case, a possible sbatch script is the following
+For an unbiased simulation, given the power of the GH nodes, using more than one chipset might be not optimal or just plain bad, if your system is not huge (> 1mln atoms), as the parallel efficiency decreases due to the presence of too many resources and the inter-chip communication. However, if you have more than one independent replica, you can run all of them in parallel. For example, with ca. 200k atoms in terms of total output of the node it is way better to run 4 independent replicas – one per chipset – rather than using a whole node for a system. In this case, a possible sbatch script is [his](./sbatch_plainMD.sh)
 ```
 #!/bin/bash
 #SBATCH --job-name=jobname
