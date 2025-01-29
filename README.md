@@ -36,7 +36,7 @@ cd programs
 wget https://github.com/plumed/plumed2/releases/download/v2.9.1/plumed-2.9.1.tgz
 tar -xf plumed-2.9.1.tgz
 cd plumed-2.9.1
-mv ../plumed-2.9.1.tgz/ ./
+mv ../plumed-2.9.1.tgz ./
 ./configure --enable-modules=all
 make -j32
 source sourceme.sh
@@ -47,7 +47,7 @@ PLUMED should compile with MPI active. Then download and patch GROMACS 2023
 wget https://ftp.gromacs.org/gromacs/gromacs-2023.tar.gz
 tar -xf gromacs-2023.tar.gz
 cd gromacs-2023
-mv ../gromacs-2023.tar.gz/ ./
+mv ../gromacs-2023.tar.gz ./
 plumed patch -p
 ```
 Select the GROMACS 2023 patch when prompted by PLUMED and install GROMACS
