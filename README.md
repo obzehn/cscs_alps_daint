@@ -67,9 +67,10 @@ which gcc
 which g++
 ```
 to `-DCMAKE_C_COMPILER` and `-DCMAKE_CXX_COMPILER`, respectively. These series of commands will give you a working installation of GROMACS 2023 inside your home, and something like `source ~/programs/gromacs-2023/install/bin/GMXRC` should source both the `gmx` and the `gmx_mpi` versions of it.
+
 At this point you should have a working GROMACS2023 patched with PLUMED2.9.1 installation, you can exit the environment and the debug node. These installations are now linked to the develop environment, so before sourcing their binaries we have to get into the GROMACS develop uenv.
 The sbatch script to submit jobs is similar to that for Baobab/Piz-Daint but has a few more mandatory keywords. The max time is still capped at 24h. You should run your simulations in your `$SCRATCH` directory. Consider also that you must i) define the environment that you need in the sbatch file or ii) submit the sbatch file from within the environment you intend to use. In general it is better to define the environment and its view in the sbatch file so to avoid mistakes and failed jobs. There are also other two details that are important
-1. Despite the GH chipsets having 72 core each, the CSCS people [say](https://confluence.cscs.ch/display/KB/GROMACS#GROMACS-HowtoRun) that one should use max 64 of them or let some cores free to handle other background processes within the node. So, don’t require more than 64 cores per GH chipset.
+1. Despite the GH chipsets having 72 core each, the CSCS people [say](https://confluence.cscs.ch/display/KB/GROMACS#GROMACS-HowtoRun) that one should use max 64 of them or let some cores free to handle other background processes within the node. So, do not require more than 64 cores per GH chipset.
 2. One has to force CUDA-MPI aware parallelization within the node. This is achieved with a few lines in the sbatch file AND by adding a wrapper each time we call srun to run a job. One way to do this is to save a copy of the wrapper in a directory in your home folder alongside the other programs (`~/programs/mps-wrapper.sh`) and point at it in the sbatch file rather than copy-paste the wrapper in a new directory everytime I have to run a simulation, but you do you.
 
 You can download a copy of the wrapper from [this github repo](./mps-wrapper.sh) or copy paste the following lines of code (hopefully this won't need updates, but in case it is not working visit the links for the official CSCS versions [here](https://confluence.cscs.ch/display/KB/Oversubscription+of+GPU+cards#OversubscriptionofGPUcards-WrapperScript) or [here](https://eth-cscs.github.io/alps-uenv/uenv-gromacs/)).
@@ -129,7 +130,7 @@ chmod +x mps-wrapper.sh
 # sourcing of GROMACS, PLUMED, and the wrapper location
 # change youruser to you
 source "/users/youruser/programs/plumed-2.9.1/sourceme.sh"
-source "/users/youruser/programs/gromacs-2023/install_mpi/bin/GMXRC"
+source "/users/youruser/programs/gromacs-2023/install/bin/GMXRC"
 wrapper="/users/youruser/programs/mps-wrapper.sh"
 
 # Grace-Hopper MPI-aware GPU, do not touch
@@ -163,7 +164,7 @@ For an unbiased simulation, given the power of the GH nodes, using more than one
 # sourcing of GROMACS, PLUMED, and the wrapper location
 # change youruser to you
 source "/users/youruser/programs/plumed-2.9.1/sourceme.sh"
-source "/users/youruser/programs/gromacs-2023/install_mpi/bin/GMXRC"
+source "/users/youruser/programs/gromacs-2023/install/bin/GMXRC"
 wrapper="/users/youruser/programs/mps-wrapper.sh"
 
 # Grace-Hopper MPI-aware GPU, do not touch
@@ -186,8 +187,8 @@ where the `-multidir` flag points at the different replica directories and there
 #SBATCH --cpus-per-task 32
 srun -n 8 ${wrapper} -- gmx_mpi mdrun -pin on -ntomp 32 -npme 1 [...] -multidir dir1 dir2 dir3 dir4
 ```
-you should be able to run the same four simulations but with 2MPI processes per replica and 32OMP per process. This might work better but it is system dependent. Similarly, if the systems are large (>500k atoms), you might try to split one system on two GPUs and run two replicas per node. Given that the simulation time is quite limited, it is better to invest half an hour to fine tune the parameters of your sbatch file. You can do this “for free” if you request to run on the debug queue with the additional
+you should be able to run the same four simulations but with 2MPI processes per replica and 32OMP per process. This might work better but it is system dependent. Similarly, if the systems are large (>500k atoms), you might try to split one system on two GPUs and run two replicas per node. Given that the simulation time is quite limited, it is better to invest half an hour to fine tune the parameters of your sbatch file. You can do this faster if you request to run on the debug queue with the additional
 ```
 #SBATCH --partition=debug
 ```
-Here you can run only one job at a time for max 30min, but generally there is no waiting time and it should not count towards your total simulation time usage. Just test a few combinations of GPUs/MPI/OMP for your replicas on the debug queue and then submit to the normal queue (just take away the line specifying the debug partition).
+Here you can run only one job at a time for max 30min, but consequentially there is no long waiting time. Just test a few combinations of GPUs/MPI/OMP for your replicas on the debug queue and then submit to the normal queue (just take away the line specifying the debug partition).
