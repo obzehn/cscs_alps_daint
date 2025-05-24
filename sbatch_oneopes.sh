@@ -13,7 +13,7 @@
 # sourcing of GROMACS, PLUMED, and the wrapper location
 # change youruser to you
 source "/users/youruser/programs/plumed-2.9.1/sourceme.sh"
-source "/users/youruser/programs/gromacs-2023/install_mpi/bin/GMXRC"
+source "/users/youruser/programs/gromacs-2023/install/bin/GMXRC"
 wrapper="/users/youruser/programs/mps-wrapper.sh"
 
 # Grace-Hopper MPI-aware GPU, do not touch
