@@ -1,14 +1,14 @@
 # How-to for GROMACS/PLUMED installation and submission on CSCS Alps Daint
-This is a short summary to compile your own GROMACS version on [CSCS Alps](https://www.cscs.ch/computers/alps), where you have access to the pool of ca. 2700 [NVIDIA Grace-Hopper](https://www.nvidia.com/en-us/data-center/grace-hopper-superchip/) (GH) nodes on Alps Daint. Each GH chipset has 72 cores, 128GB RAM, and a H100 GPU with 96GB of memory. Keep in mind that these are massive nodes, as each one has four GH chipsets, in contrast to Piz-Daint, which feautured small nodes and good internode scaling. This has a few consequences, mainly
+This is a short summary to compile your own GROMACS version on [CSCS Alps](https://www.cscs.ch/computers/alps), specifically on [Daint](https://docs.cscs.ch/clusters/daint/), where you have access to the pool of ca. 2700 [NVIDIA Grace-Hopper](https://www.nvidia.com/en-us/data-center/grace-hopper-superchip/) (GH) nodes on Alps Daint. Each GH chipset has 72 cores, 128GB RAM, and a H100 GPU with 96GB of memory. Keep in mind that these are massive nodes, as each one has four GH chipsets, in contrast to Piz-Daint, which feautured small nodes and good internode scaling. This has a few consequences, mainly
 1. We can't (as for now) require just a fraction of a node. You have to require a full one, even if you plan to run only on one of the chipsets, and consequently will burn the full computational time you require even if you use only part of the machine.
 2. The amount of cores and the GPU of a SINGLE chipset are already overpowered for most unbiased MD simulations of small (<100k atoms) systems. In these cases the scaling is very negative, with performance decreasing the moment you split the job on more than one chipset. For small sized jobs, or jobs with only one replica, baobab is still the best option.
-3. As far as what we do now, it is highly unlikely that we will ever scale beyond one node, as the GH chipsets are so powerful that internode communication becomes a serius bottleneck, and a single node is able to hande ~1mln atom systems easily. As such, countrary to Piz-Daint, most of our jobs here will be only single-node jobs.
+3. As far as what we do now, it is highly unlikely that we will ever scale beyond one node, as the GH chipsets are so powerful that internode communication becomes a serius bottleneck, and a single node is able to hande ~1mln atom systems easily. As such, countrary to Piz.Daint, most of our jobs here will be only single-node jobs.
 Regarding our common types of simulations, the main take at home messages are
 1. For standard OneOpes with 8 replicas and ca. 100/200k atoms boxes, a node is a good compromise and should easily outperform Baobab. You can put two replicas per GH chipset, effectively giving half a GPU and 32 cores to each replica. More on this later on.
 2. For small OneOPES runs (e.g. folding), Baobab will be a better choice, as the systems are so small that you can’t really benefit from GH chipsets. Avoid CSCS in this case and fall back on local nodes and/or Baobab.
 3. For unbiased simulations, test a few configurations and see how the system scales. Most likely, the best choice will be to run in parallel two or four simulations (2 GPUs or 1 GPU per sim, respectively) by using the multidir flag, but without exchanges. Also more on this later on.
 
-If you need Alps Daint, you can source those already available from CSCS people. However, this limits the pool of accessible software, especially if we have to modify/debug/resort to specific version of PLUMED and GROMACS. As such, will likely need to compile your GROMACS and PLUMED versions. First, login to Alps Daint (more info [here](https://confluence.cscs.ch/display/KB/Daint), for standard `ssh` you still jump through `ela`, the new address is `daint.alps.cscs.ch`). With respect to Piz-Daint and Baobab, here there is not the module load syntax anymore, but they use [`uenv`](https://confluence.cscs.ch/display/KB/uenv+user+environments) to set up the user environment. Basically, you have to create a container that holds your environments, check which environments are available, and pull the one you need. This needs to be done only once, then the environment remains available without having to pull it again. To create the container and pull GROMACS environment just run
+If you need Alps.Daint, you can source those already available from CSCS people. However, this limits the pool of accessible software, especially if we have to modify/debug/resort to specific version of PLUMED and GROMACS. As such, will likely need to compile your GROMACS and PLUMED versions. First, login to Daint (more info [here](https://docs.cscs.ch/access/), for standard `ssh` you still jump through `ela`, the new address is `daint.alps.cscs.ch`). With respect to Piz.Daint, here there is not the `module load` syntax anymore, but they use [`uenv`](https://docs.cscs.ch/build-install/uenv/) to set up the user environment. Basically, you have to create a container that holds your environments, check which environments are available, and pull the one you need. This needs to be done only once, then the environment remains available without having to pull it again. To create the container and pull GROMACS environment just run
 ```
 uenv repo create
 uenv image pull gromacs/2024:v1
@@ -18,7 +18,7 @@ The `gromacs/2024:v1` environment contains different *views*, basically a differ
 2. **--view=plumed** loads an installation of GROMACS 2022.5 patched with PLUMED 2.9.0
 3. **--view=develop** loads the packages needed to install GROMACS related stuff (CUDA etc.) without loading any specific GROMACS.
 
-A few details are outlined in the [uenv gromacs](https://eth-cscs.github.io/alps-uenv/uenv-gromacs/) page from CSCS and [here](https://confluence.cscs.ch/display/KB/GROMACS).
+A few details are outlined in the [uenv gromacs](https://docs.cscs.ch/software/sciapps/gromacs/) page. In the following I report a guide to install GROMACS 2023 patched with PLUMED 2.9.1, which is loosely based on [this section](https://docs.cscs.ch/software/sciapps/gromacs/#building-gromacs-from-source) on CSCS website. I am no CSCS employee nor a GROMACS developer, so use this at your own risk.
 To compile GROMACS it is better if we `salloc` to a debug node, so we don't cram the head node with our processes (and get -rightfully- kicked out), with the following
 ```
 salloc --nodes=1 -t 00:30:00 --partition=debug
@@ -54,26 +54,19 @@ Select the GROMACS 2023 patch when prompted by PLUMED and install GROMACS
 ```
 mkdir build install
 cd build
-cmake .. -DGMX_BUILD_OWN_FFTW=NO -DREGRESSIONTEST_DOWNLOAD=NO -DGMX_GPU=CUDA -DGMX_MPI=NO -DCMAKE_INSTALL_PREFIX=../install/ -DGMX_SIMD=ARM_NEON_ASIMD -DGMX_HWLOC=ON -DCMAKE_C_COMPILER=/user-environment/linux-sles15-neoverse_v2/gcc-12.3.0/gcc-12.3.0-yfdpfoi7qo4e7ub4l4isthtcfevf4zee/bin/gcc -DCMAKE_CXX_COMPILER=/user-environment/linux-sles15-neoverse_v2/gcc-12.3.0/gcc-12.3.0-yfdpfoi7qo4e7ub4l4isthtcfevf4zee/bin/g++
-make -j32
-make install
-cmake .. -DGMX_BUILD_OWN_FFTW=NO -DREGRESSIONTEST_DOWNLOAD=NO -DGMX_GPU=CUDA -DGMX_MPI=ON -DCMAKE_INSTALL_PREFIX=../install/ -DGMX_SIMD=ARM_NEON_ASIMD -DGMX_HWLOC=ON -DCMAKE_C_COMPILER=/user-environment/linux-sles15-neoverse_v2/gcc-12.3.0/gcc-12.3.0-yfdpfoi7qo4e7ub4l4isthtcfevf4zee/bin/gcc -DCMAKE_CXX_COMPILER=/user-environment/linux-sles15-neoverse_v2/gcc-12.3.0/gcc-12.3.0-yfdpfoi7qo4e7ub4l4isthtcfevf4zee/bin/g++
-make -j32
+cmake .. -DGMX_GPU=CUDA -DGMX_MPI=ON -DCMAKE_INSTALL_PREFIX=../install/ -DGMX_SIMD=ARM_NEON_ASIMD -DGMX_HWLOC=ON -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DGMX_CUDA_TARGET_SM="90"
+make -j64
+make check
 make install
 ```
-Note that C and C++ compiler are specified by hand because the environment fails to solve them alone. In case the compilation dies because the C/C++ compilators are not found, just provide those listed by
-```
-which gcc
-which g++
-```
-to `-DCMAKE_C_COMPILER` and `-DCMAKE_CXX_COMPILER`, respectively. These series of commands will give you a working installation of GROMACS 2023 inside your home, and something like `source ~/programs/gromacs-2023/install/bin/GMXRC` should source both the `gmx` and the `gmx_mpi` versions of it.
+These series of commands will give you a working installation of GROMACS 2023 inside your home, and something like `source ~/programs/gromacs-2023/install/bin/GMXRC` should source both the `gmx_mpi` versions of it. The non-MPI version is not really useful, but in case you need it just redo the above passage for GROMACS installation clearing the `build` directory and specifying `-DGMX_MPI=NO` while keeping the same target installation directory, so that you can source both `gmx` and `gmx_mpi` from the same binary.
 
 At this point you should have a working GROMACS2023 patched with PLUMED2.9.1 installation, you can exit the environment and the debug node. These installations are now linked to the develop environment, so before sourcing their binaries we have to get into the GROMACS develop uenv.
-The sbatch script to submit jobs is similar to that for Baobab/Piz-Daint but has a few more mandatory keywords. The max time is still capped at 24h. You should run your simulations in your `$SCRATCH` directory. Consider also that you must i) define the environment that you need in the sbatch file or ii) submit the sbatch file from within the environment you intend to use. In general it is better to define the environment and its view in the sbatch file so to avoid mistakes and failed jobs. There are also other two details that are important
-1. Despite the GH chipsets having 72 core each, the CSCS people [say](https://confluence.cscs.ch/display/KB/GROMACS#GROMACS-HowtoRun) that one should use max 64 of them or let some cores free to handle other background processes within the node. So, do not require more than 64 cores per GH chipset.
+The sbatch script to submit jobs is similar to that for Piz.Daint but has a few more mandatory keywords. The max time is still capped at 24h. You should run your simulations in your `$SCRATCH` directory. Consider also that you must i) define the environment that you need in the sbatch file or ii) submit the sbatch file from within the environment you intend to use. In general it is better to define the environment and its view in the sbatch file so to avoid mistakes and failed jobs. There are also other two details that are important
+1. Despite the GH chipsets having 72 core each, the CSCS people [say](https://docs.cscs.ch/software/sciapps/gromacs/#how-to-run) that one should use max 64 of them or let some cores free to handle other background processes within the node. So, do not require more than 64 cores per GH chipset.
 2. One has to force CUDA-MPI aware parallelization within the node. This is achieved with a few lines in the sbatch file AND by adding a wrapper each time we call srun to run a job. One way to do this is to save a copy of the wrapper in a directory in your home folder alongside the other programs (`~/programs/mps-wrapper.sh`) and point at it in the sbatch file rather than copy-paste the wrapper in a new directory everytime I have to run a simulation, but you do you.
 
-You can download a copy of the wrapper from [this github repo](./mps-wrapper.sh) or copy paste the following lines of code (hopefully this won't need updates, but in case it is not working visit the links for the official CSCS versions [here](https://confluence.cscs.ch/display/KB/Oversubscription+of+GPU+cards#OversubscriptionofGPUcards-WrapperScript) or [here](https://eth-cscs.github.io/alps-uenv/uenv-gromacs/)).
+You can download a copy of the wrapper from [this github repo](./mps-wrapper.sh) or copy paste the following lines of code (hopefully this won't need updates, but in case it is not working visit the links for the official CSCS versions [here](https://confluence.cscs.ch/display/KB/Oversubscription+of+GPU+cards#OversubscriptionofGPUcards-WrapperScript).
 ```
 #!/bin/bash
 # Example mps-wrapper.sh usage:
@@ -122,7 +115,7 @@ chmod +x mps-wrapper.sh
 #SBATCH --gpus=4
 #SBATCH --ntasks=8
 #SBATCH --cpus-per-task 32
-#SBATCH --account=s1274
+#SBATCH --account=lp84
 #SBATCH --hint=nomultithread
 #SBATCH --uenv=gromacs/2024:v1
 #SBATCH --view=develop
@@ -143,7 +136,7 @@ export GMX_ENABLE_DIRECT_GPU_COMM=1
 export GMX_FORCE_GPU_AWARE_MPI=1
 
 # GROMACS stuff
-srun -n 8 ${wrapper} -- gmx_mpi mdrun -pin on -ntomp 32 -multidir dir1 dir2 dir3 dir4 dir5 dir6 dir7 [...]
+srun -n 8 ${wrapper} -- gmx_mpi mdrun -notunepme -gpu_id 0123 -pin on -ntomp 32 -multidir dir1 dir2 dir3 dir4 dir5 dir6 dir7 [...]
 exit;
 ```
 I am requiring a full node, 4 GPUs (all of them), 8 tasks (the 8 MPIs, one per replica in OneOpes) and I give 32 cores per replica (so that I have 64 per node, the max permitted). You can fine tune this, it might be that other combinations and repartitions of CPUs work well.
@@ -156,7 +149,7 @@ For an unbiased simulation, given the power of the GH nodes, using more than one
 #SBATCH --gpus=4
 #SBATCH --ntasks=4
 #SBATCH --cpus-per-task 64
-#SBATCH --account=s1274
+#SBATCH --account=lp84
 #SBATCH --hint=nomultithread
 #SBATCH --uenv=gromacs/2024:v1
 #SBATCH --view=develop
@@ -177,7 +170,7 @@ export GMX_ENABLE_DIRECT_GPU_COMM=1
 export GMX_FORCE_GPU_AWARE_MPI=1
 
 # GROMACS stuff
-srun -n 4 ${wrapper} -- gmx_mpi mdrun -pin on -ntomp 64 [...] -multidir dir1 dir2 dir3 dir4
+srun -n 4 ${wrapper} -- gmx_mpi mdrun -pin on -ntomp 64 -gpu_id 0123 [...] -multidir dir1 dir2 dir3 dir4
 exit;
 ```
 where the `-multidir` flag points at the different replica directories and there is no -hrex flag, so the replicas are not exchanging and are independent. In this way the whole node is used and you optimize the output for replicas of unbiased runs. There is further space for optimization, e.g. with
@@ -191,4 +184,4 @@ you should be able to run the same four simulations but with 2MPI processes per 
 ```
 #SBATCH --partition=debug
 ```
-Here you can run only one job at a time for max 30min, but consequentially there is no long waiting time. Just test a few combinations of GPUs/MPI/OMP for your replicas on the debug queue and then submit to the normal queue (just take away the line specifying the debug partition).
+Here you can run only one job at a time for max 30min, but consequentially there is no long waiting time. Just test a few combinations of GPUs/MPI/OMP for your replicas on the debug queue and then submit to the normal queue (just take away the line specifying the debug partition). More details on the slurm queueing system are contained [here](https://docs.cscs.ch/running/slurm/), while [here](https://manual.gromacs.org/current/user-guide/mdrun-performance.html) are some details on how to optimize GROMACS performance.
